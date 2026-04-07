@@ -8,8 +8,8 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        serif: ["Georgia", "Cambria", "Times New Roman", "Times", "serif"],
-        sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "sans-serif"],
+        serif: ["var(--font-serif)", "Georgia", "Cambria", "Times New Roman", "serif"],
+        sans: ["var(--font-sans)", "DM Sans", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       colors: {
         cream: { 50: "#faf9f7", 100: "#f5f2ed", 200: "#ede7de" },

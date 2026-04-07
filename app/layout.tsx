@@ -1,5 +1,20 @@
 import type { Metadata } from "next";
+import { Libre_Baskerville, DM_Sans } from "next/font/google";
 import "./globals.css";
+
+const baskerville = Libre_Baskerville({
+  subsets: ["latin"],
+  weight: ["400", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-serif",
+  display: "swap",
+});
+
+const dmSans = DM_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Throughline — Green Card Document Reviewer",
@@ -12,7 +27,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-cream-50">{children}</body>
+      <body className={`${baskerville.variable} ${dmSans.variable} min-h-screen bg-cream-50`}>
+        {children}
+      </body>
     </html>
   );
 }

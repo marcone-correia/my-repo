@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import ReportView, { ReviewReport } from "@/components/ReportView";
+import Quiz from "@/components/Quiz";
+import { IntakeAnswers } from "@/lib/intakeTypes";
+import demoReport from "@/lib/demoReport";
 
-type AppState = "idle" | "loading" | "done" | "error";
+type AppState = "intake" | "idle" | "loading" | "done" | "error";
 
 const ACCEPTED_EXT = ".pdf,.jpg,.jpeg,.png";
 
@@ -13,6 +16,29 @@ function fileToBase64(file: File): Promise<string> {
     reader.onload = () => resolve((reader.result as string).split(",")[1]);
     reader.onerror = reject;
     reader.readAsDataURL(file);
+  });
+}
+
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX_DIM = 1600;
+      let { width, height } = img;
+      if (width > MAX_DIM || height > MAX_DIM) {
+        if (width > height) { height = Math.round((height * MAX_DIM) / width); width = MAX_DIM; }
+        else { width = Math.round((width * MAX_DIM) / height); height = MAX_DIM; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+      resolve(dataUrl.split(",")[1]);
+    };
+    img.onerror = reject;
+    img.src = url;
   });
 }
 
@@ -27,11 +53,19 @@ function getMediaType(file: File): "application/pdf" | "image/jpeg" | "image/png
 }
 
 export default function Home() {
+  const [isDemo, setIsDemo] = useState(false);
+  useEffect(() => {
+    setIsDemo(new URLSearchParams(window.location.search).get("demo") === "true");
+  }, []);
+
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [state, setState] = useState<AppState>("idle");
+  const [state, setState] = useState<AppState>("intake");
+  const [intake, setIntake] = useState<IntakeAnswers | null>(null);
+  const [caseContext, setCaseContext] = useState("");
   const [report, setReport] = useState<ReviewReport | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [progressMsg, setProgressMsg] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const addFiles = useCallback((incoming: File[]) => {
@@ -47,36 +81,71 @@ export default function Home() {
   const onDragLeave = () => setDragging(false);
   const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) addFiles(Array.from(e.target.files)); };
 
+  const MAX_PDF_BYTES = 40 * 1024 * 1024; // 40 MB — PDFs only (images are compressed before this check)
+
   const runReview = async () => {
     if (files.length === 0) return;
-    setState("loading"); setReport(null); setErrorMsg("");
+    const pdfSize = files.filter(f => getMediaType(f) === "application/pdf").reduce((sum, f) => sum + f.size, 0);
+    if (pdfSize > MAX_PDF_BYTES) {
+      setErrorMsg(`Your PDFs total ${(pdfSize / 1024 / 1024).toFixed(1)} MB, which exceeds the 40 MB limit. Try splitting the review into two batches.`);
+      setState("error");
+      return;
+    }
+    setState("loading"); setReport(null); setErrorMsg(""); setProgressMsg("");
     try {
-      const filePayloads = await Promise.all(files.map(async (file) => ({
-        filename: file.name, mediaType: getMediaType(file)!, data: await fileToBase64(file),
-      })));
+      const filePayloads = await Promise.all(files.map(async (file) => {
+        const mediaType = getMediaType(file)!;
+        const isPdf = mediaType === "application/pdf";
+        const data = isPdf ? await fileToBase64(file) : await compressImage(file);
+        return { filename: file.name, mediaType: isPdf ? mediaType : "image/jpeg" as const, data };
+      }));
       const res = await fetch("/api/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ files: filePayloads }),
+        body: JSON.stringify({ files: filePayloads, intake, caseContext }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
-      setReport(data as ReviewReport);
-      setState("done");
+      if (!res.ok || !res.body) throw new Error("Something went wrong.");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const msg = JSON.parse(line);
+          if (msg.type === "progress") setProgressMsg(msg.message);
+          else if (msg.type === "result") { setReport(msg.report as ReviewReport); setState("done"); }
+          else if (msg.type === "error") throw new Error(msg.message);
+        }
+      }
     } catch (err) {
       setErrorMsg(err instanceof Error ? err.message : "An unexpected error occurred.");
       setState("error");
     }
   };
 
-  const reset = () => { setFiles([]); setReport(null); setErrorMsg(""); setState("idle"); };
+  const handleQuizComplete = (answers: IntakeAnswers, context: string) => {
+    setIntake(answers);
+    setCaseContext(context);
+    setState("idle");
+  };
+
+  const reset = () => { setFiles([]); setReport(null); setErrorMsg(""); setProgressMsg(""); setIntake(null); setCaseContext(""); setState("intake"); };
+
+  if (isDemo) return <ReportView report={demoReport} isDemo />;
+  if (state === "intake") return <Quiz onComplete={handleQuizComplete} />;
+  if (state === "done" && report) return <ReportView report={report} onReset={reset} />;
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-12">
       <header className="mb-10">
-        <h1 className="font-serif text-3xl font-semibold text-stone-900 tracking-tight">Throughline</h1>
+        <h1 className="font-serif text-3xl font-bold text-stone-900 tracking-tight">Throughline</h1>
         <p className="mt-2 text-stone-500 text-sm leading-relaxed">
-          Upload your green card documents. We&apos;ll tell you what looks complete, what&apos;s missing, and what might need attention before you file.
+          Now upload your documents — all at once is fine.
         </p>
       </header>
 
@@ -125,7 +194,7 @@ export default function Home() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                   </svg>
-                  Reviewing your documents…
+                  {progressMsg || "Reviewing your documents…"}
                 </span>
               ) : "Run Review"}
             </button>
@@ -144,15 +213,6 @@ export default function Home() {
         </div>
       )}
 
-      {state === "done" && report && (
-        <div className="mt-2">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="font-serif text-xl font-semibold text-stone-900">Case Readiness Report</h2>
-            <button onClick={reset} className="text-sm text-stone-500 hover:text-stone-700 underline underline-offset-2 transition-colors">Start over</button>
-          </div>
-          <ReportView report={report} />
-        </div>
-      )}
     </main>
   );
 }
