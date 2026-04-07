@@ -104,7 +104,7 @@ function GroupedSection({
       <p className="text-sm text-stone-500 mb-8">Fill in your information below. Required fields are marked with *.</p>
 
       <div className="space-y-8">
-        {[...groups.entries()].map(([groupName, questions]) => (
+        {Array.from(groups.entries()).map(([groupName, questions]) => (
           <div key={groupName}>
             {groupName !== "__ungrouped__" && (
               <p className="text-xs font-semibold uppercase tracking-widest text-stone-400 mb-3">
