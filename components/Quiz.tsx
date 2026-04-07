@@ -273,6 +273,10 @@ export default function Quiz({
         {/* ── Welcome ────────────────────────────────────────────────────── */}
         {isWelcome && (
           <div>
+            <div className="flex justify-center mb-5">
+              <img src="/dhs-seal.png" alt="U.S. Department of Homeland Security" className="w-20 h-20 object-contain" />
+            </div>
+
             <h1 className="font-serif text-3xl font-bold text-stone-900 tracking-tight mb-3">
               Green Card Document Review
             </h1>
