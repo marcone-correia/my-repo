@@ -47,6 +47,7 @@ function RadioOption({ name, value, current, label, detail, onChange }: {
 }
 
 export default function IntakeForm({ onComplete }: { onComplete: (answers: IntakeAnswers) => void }) {
+  const [started, setStarted] = useState(false);
   const [petitionerType, setPetitionerType] = useState<PetitionerType | undefined>();
   const [entryMethod, setEntryMethod] = useState<EntryMethod | undefined>();
   const [currentStatus, setCurrentStatus] = useState<CurrentStatus | undefined>();
@@ -59,6 +60,51 @@ export default function IntakeForm({ onComplete }: { onComplete: (answers: Intak
     if (!allAnswered) return;
     onComplete({ petitionerType, entryMethod, currentStatus, priorRemoval, filingStage });
   };
+
+  if (!started) {
+    return (
+      <div className="text-center">
+        <div className="bg-white border border-stone-200 rounded-xl p-8">
+          <h2 className="text-2xl font-bold text-stone-900 mb-3">Case Eligibility Check</h2>
+          <p className="text-sm text-stone-500 mb-8 max-w-sm mx-auto">
+            Answer 5 quick questions so Throughline can tailor your document review to your specific situation. Based on official USCIS eligibility criteria.
+          </p>
+
+          <div className="bg-stone-50 border border-stone-200 rounded-lg p-5 text-left mb-8">
+            <p className="text-xs font-semibold text-stone-700 mb-4 flex items-center gap-2">
+              <span>⚡</span> How to get the most out of this
+            </p>
+            <ol className="space-y-3">
+              {[
+                "Answer based on your actual situation, not what you wish it were. Accuracy here leads to a better, more specific report.",
+                "If you're unsure about something, pick the closest answer — there's a \"not sure\" option for anything unclear.",
+                "This takes about 2 minutes. Your answers are used only to customize your document review.",
+              ].map((tip, i) => (
+                <li key={i} className="flex gap-3 text-sm text-stone-600">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-stone-200 text-stone-600 text-xs flex items-center justify-center font-semibold">{i + 1}</span>
+                  {tip}
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <button
+            onClick={() => setStarted(true)}
+            className="w-full rounded-lg py-3 px-6 text-sm font-medium text-white transition-colors"
+            style={{ backgroundColor: "#3d6b4a" }}
+          >
+            Start Check →
+          </button>
+
+          <p className="mt-4 text-xs text-stone-400">Takes about 2 minutes. Your answers are confidential.</p>
+        </div>
+
+        <p className="mt-4 text-xs text-stone-400 leading-relaxed max-w-sm mx-auto">
+          This tool is for educational purposes only and does not constitute legal advice. Always consult a licensed immigration attorney before filing.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div>
