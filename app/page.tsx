@@ -149,6 +149,21 @@ export default function Home() {
         </p>
       </header>
 
+      {/* I-485 Assistant entry point */}
+      <div className="mb-10 bg-white border border-stone-200 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold text-stone-800">Filling out your I-485?</p>
+          <p className="text-xs text-stone-500 mt-0.5">Answer questions one at a time and we'll fill out the official form for you.</p>
+        </div>
+        <a
+          href="/form"
+          className="flex-shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 whitespace-nowrap"
+          style={{ backgroundColor: "#3d6b4a" }}
+        >
+          Start I-485 →
+        </a>
+      </div>
+
       {state !== "done" && (
         <>
           <div

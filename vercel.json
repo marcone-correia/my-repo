@@ -1,5 +1,6 @@
 {
   "functions": {
-    "app/api/review/route.ts": { "maxDuration": 60 }
+    "app/api/review/route.ts": { "maxDuration": 300 },
+    "app/api/form/pdf/route.ts": { "maxDuration": 30 }
   }
 }
