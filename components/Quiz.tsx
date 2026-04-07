@@ -273,19 +273,44 @@ export default function Quiz({
         {/* ── Welcome ────────────────────────────────────────────────────── */}
         {isWelcome && (
           <div>
-            <h1 className="font-serif text-3xl font-bold text-stone-900 tracking-tight mb-4">
-              Let's review your green card application
+            <h1 className="font-serif text-3xl font-bold text-stone-900 tracking-tight mb-3">
+              Green Card Document Review
             </h1>
             <p className="text-stone-500 text-[15px] leading-relaxed mb-8">
-              We'll ask 5 quick questions about your case, then you'll upload your documents. Our AI will check everything and tell you exactly what's ready, what's missing, and what to fix.
+              We'll ask 5 quick questions about your case, then you'll upload your documents. Throughline will check everything and tell you exactly what's ready, what's missing, and what to fix — based on official USCIS filing requirements.
             </p>
+
+            <div className="bg-stone-50 border border-stone-200 rounded-xl p-5 mb-8">
+              <p className="text-xs font-semibold text-stone-700 mb-4 flex items-center gap-2">
+                <span>⚡</span> How to get the most out of this
+              </p>
+              <ol className="space-y-3">
+                {[
+                  "Answer based on your actual situation. Accuracy here leads to a more specific, useful report.",
+                  "If you're unsure about something, pick the closest answer — there's a \"not sure\" option for anything unclear.",
+                  "Upload everything you have, even if incomplete. Throughline will tell you what's missing.",
+                ].map((tip, i) => (
+                  <li key={i} className="flex gap-3 text-sm text-stone-600">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-stone-200 text-stone-600 text-xs flex items-center justify-center font-semibold">{i + 1}</span>
+                    {tip}
+                  </li>
+                ))}
+              </ol>
+            </div>
+
             <button
               onClick={goForward}
               className="w-full rounded-xl py-3.5 px-6 text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: "#3d6b4a" }}
             >
-              Get Started
+              Get Started →
             </button>
+
+            <p className="mt-4 text-xs text-stone-400 text-center">Takes about 2 minutes. Your answers are confidential.</p>
+
+            <p className="mt-6 text-xs text-stone-400 leading-relaxed text-center">
+              Throughline is an educational tool and does not constitute legal advice. Always consult a licensed immigration attorney before filing.
+            </p>
           </div>
         )}
 
