@@ -277,10 +277,10 @@ export default function Quiz({
               <img src="/dhs-seal.png" alt="U.S. Department of Homeland Security" className="w-20 h-20 object-contain" />
             </div>
 
-            <h1 className="font-serif text-3xl font-bold text-stone-900 tracking-tight mb-3">
+            <h1 className="font-serif text-3xl font-bold text-stone-900 tracking-tight mb-3 text-center">
               Green Card Document Review
             </h1>
-            <p className="text-stone-500 text-[15px] leading-relaxed mb-8">
+            <p className="text-stone-500 text-[15px] leading-relaxed mb-8 text-center">
               We'll ask 5 quick questions about your case, then you'll upload your documents. Throughline will check everything and tell you exactly what's ready, what's missing, and what to fix — based on official USCIS filing requirements.
             </p>
 
