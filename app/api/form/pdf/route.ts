@@ -3,13 +3,27 @@ import { PDFDocument, rgb, degrees, StandardFonts } from "pdf-lib";
 import path from "path";
 import fs from "fs";
 import { getSessionByToken } from "@/lib/db";
-import { FIELD_MAP, PART2_BASIS_FIELDS, PART6_RACE_FIELDS, PART6_ETHNICITY_FIELDS } from "@/lib/i485FieldMap";
+import {
+  TEXT_FIELD_MAP,
+  DROPDOWN_FIELD_MAP,
+  GENDER_FIELD_BASE,
+  BASIS_FIELD_MAP,
+  ETHNICITY_FIELD_BASE,
+  RACE_FIELD_BASE,
+  RACE_OPTIONS,
+  EYE_COLOR_FIELD_BASE,
+  EYE_COLOR_OPTIONS,
+  HAIR_COLOR_FIELD_BASE,
+  HAIR_COLOR_OPTIONS,
+  WEIGHT_FIELDS,
+  BACKGROUND_YESNO_MAP,
+  DATE_QUESTION_IDS,
+} from "@/lib/i485FieldMap";
 
 const PDF_PATH = path.join(process.cwd(), "public", "forms", "i485.pdf");
 
 function formatDate(value: string): string {
   if (!value) return "";
-  // Accepts YYYY-MM-DD (HTML date input) → MM/DD/YYYY
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) return `${match[2]}/${match[3]}/${match[1]}`;
   return value;
@@ -20,118 +34,110 @@ async function fillPdf(
   preview: boolean
 ): Promise<Uint8Array> {
   if (!fs.existsSync(PDF_PATH)) {
-    throw new Error(
-      "I-485 PDF not found at public/forms/i485.pdf. Please download the official USCIS I-485 (edition 09/17/19) and place it there."
-    );
+    throw new Error("I-485 PDF not found at public/forms/i485.pdf.");
   }
 
   const pdfBytes = fs.readFileSync(PDF_PATH);
-  const pdfDoc  = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-  const form    = pdfDoc.getForm();
+  const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const form = pdfDoc.getForm();
 
-  // Helper: set a text field safely
   function setText(fieldName: string, value: string) {
-    try {
-      const field = form.getTextField(fieldName);
-      field.setText(value);
-    } catch {
-      // field not found — expected until we verify against live PDF
-    }
+    try { form.getTextField(fieldName).setText(value); } catch { /* field not found */ }
   }
 
-  // Helper: set a checkbox safely
   function setCheckbox(fieldName: string, checked: boolean) {
     try {
-      const field = form.getCheckBox(fieldName);
-      checked ? field.check() : field.uncheck();
-    } catch {
-      // field not found
-    }
+      const cb = form.getCheckBox(fieldName);
+      checked ? cb.check() : cb.uncheck();
+    } catch { /* field not found */ }
   }
 
-  // Helper: set a yes/no pair
-  function setYesNo(baseFieldId: string, answer: string) {
-    // Try standard USCIS naming: Pt9LineXX_YesNoYes / Pt9LineXX_YesNoNo
-    const base = FIELD_MAP[baseFieldId] as string;
-    if (!base) return;
-    setCheckbox(`${base}Yes`, answer === "yes");
-    setCheckbox(`${base}No`,  answer === "no");
-    // Also try alternate suffix patterns
-    setCheckbox(`${base}_Yes`, answer === "yes");
-    setCheckbox(`${base}_No`,  answer === "no");
+  function setDropdown(fieldName: string, value: string) {
+    try {
+      const dd = form.getDropdown(fieldName);
+      const opts = dd.getOptions();
+      if (opts.includes(value)) dd.select(value);
+    } catch { /* field not found */ }
   }
 
-  // ── Fill standard text / date fields ──────────────────────────────────────
-  for (const [questionId, value] of Object.entries(formData)) {
+  // ── Text fields ──────────────────────────────────────────────────────────────
+  for (const [qid, value] of Object.entries(formData)) {
     if (!value) continue;
-
-    const pdfField = FIELD_MAP[questionId];
-    if (!pdfField) continue;
-
-    // Skip special-cased fields handled below
-    if (
-      questionId === "Pt2Line1_AdjustmentBasis" ||
-      questionId === "Pt6Line1_Ethnicity" ||
-      questionId === "Pt6Line2_Race" ||
-      questionId.endsWith("_YesNo")
-    ) continue;
-
-    const fieldName = Array.isArray(pdfField) ? pdfField[0] : pdfField;
-
-    // Date fields
-    const dateFields = [
-      "Pt1Line3_DateofBirth",
-      "Pt3Line3_DateLastEntry",
-      "Pt3Line8_PassportExpiration",
-      "Pt3Line12_VisaExpiration",
-      "Pt4Line1_DateFrom",
-      "Pt4Line2_DateFrom",
-      "Pt4Line2_DateTo",
-      "Pt5Line1_DateFrom",
-      "Pt5Line1_DateTo",
-      "Pt5Line2_DateFrom",
-      "Pt5Line2_DateTo",
-    ];
-
-    if (dateFields.includes(questionId)) {
-      setText(fieldName, formatDate(value));
-    } else {
-      setText(fieldName, value);
-    }
+    const fieldName = TEXT_FIELD_MAP[qid];
+    if (!fieldName) continue;
+    setText(fieldName, DATE_QUESTION_IDS.has(qid) ? formatDate(value) : value);
   }
 
-  // ── Part 2 — Basis of eligibility checkboxes ──────────────────────────────
+  // ── Dropdown fields ──────────────────────────────────────────────────────────
+  for (const [qid, value] of Object.entries(formData)) {
+    if (!value) continue;
+    const fieldName = DROPDOWN_FIELD_MAP[qid];
+    if (!fieldName) continue;
+    setDropdown(fieldName, value);
+  }
+
+  // ── Gender ───────────────────────────────────────────────────────────────────
+  const gender = formData["Pt1Line18_Gender"];
+  if (gender) {
+    setCheckbox(`${GENDER_FIELD_BASE}[0]`, gender === "Male");
+    setCheckbox(`${GENDER_FIELD_BASE}[1]`, gender === "Female");
+  }
+
+  // ── Part 2 — Basis of eligibility ───────────────────────────────────────────
   const basis = formData["Pt2Line1_AdjustmentBasis"];
   if (basis) {
-    for (const [key, cbField] of Object.entries(PART2_BASIS_FIELDS)) {
-      setCheckbox(cbField, key === basis);
+    for (const [key, { field, index }] of Object.entries(BASIS_FIELD_MAP)) {
+      setCheckbox(`${field}[${index}]`, key === basis);
     }
   }
 
-  // ── Part 6 — Ethnicity checkboxes ─────────────────────────────────────────
+  // ── Part 6 — Ethnicity ───────────────────────────────────────────────────────
   const ethnicity = formData["Pt6Line1_Ethnicity"];
   if (ethnicity) {
-    for (const [key, cbField] of Object.entries(PART6_ETHNICITY_FIELDS)) {
-      setCheckbox(cbField, key === ethnicity);
-    }
+    setCheckbox(`${ETHNICITY_FIELD_BASE}[0]`, ethnicity === "Hispanic or Latino");
+    setCheckbox(`${ETHNICITY_FIELD_BASE}[1]`, ethnicity === "Not Hispanic or Latino");
   }
 
-  // ── Part 6 — Race checkboxes ───────────────────────────────────────────────
+  // ── Part 6 — Race ────────────────────────────────────────────────────────────
   const race = formData["Pt6Line2_Race"];
   if (race) {
-    for (const [key, cbField] of Object.entries(PART6_RACE_FIELDS)) {
-      setCheckbox(cbField, key === race);
-    }
+    RACE_OPTIONS.forEach((opt, i) => {
+      setCheckbox(`${RACE_FIELD_BASE}[${i}]`, race === opt);
+    });
   }
 
-  // ── Part 9 — Yes/No pairs ─────────────────────────────────────────────────
-  const yesNoFields = Object.keys(FIELD_MAP).filter((k) => k.endsWith("_YesNo"));
-  for (const fieldId of yesNoFields) {
-    const answer = formData[fieldId];
-    if (answer) setYesNo(fieldId, answer);
+  // ── Part 6 — Eye color ───────────────────────────────────────────────────────
+  const eyeColor = formData["Pt6Line6_EyeColor"];
+  if (eyeColor) {
+    EYE_COLOR_OPTIONS.forEach((opt, i) => {
+      setCheckbox(`${EYE_COLOR_FIELD_BASE}[${i}]`, eyeColor === opt);
+    });
   }
 
-  // ── DRAFT watermark ────────────────────────────────────────────────────────
+  // ── Part 6 — Hair color ──────────────────────────────────────────────────────
+  const hairColor = formData["Pt6Line7_HairColor"];
+  if (hairColor) {
+    HAIR_COLOR_OPTIONS.forEach((opt, i) => {
+      setCheckbox(`${HAIR_COLOR_FIELD_BASE}[${i}]`, hairColor === opt);
+    });
+  }
+
+  // ── Part 6 — Weight (3 digit boxes) ─────────────────────────────────────────
+  const weightRaw = formData["Pt6Line5_WeightLbs"];
+  if (weightRaw) {
+    const digits = weightRaw.replace(/\D/g, "").padStart(3, "0").slice(-3);
+    WEIGHT_FIELDS.forEach((field, i) => setText(field, digits[i]));
+  }
+
+  // ── Part 8 — Background Yes/No ───────────────────────────────────────────────
+  for (const [qid, fieldBase] of Object.entries(BACKGROUND_YESNO_MAP)) {
+    const answer = formData[qid];
+    if (!answer) continue;
+    setCheckbox(`${fieldBase}[0]`, answer === "yes");
+    setCheckbox(`${fieldBase}[1]`, answer === "no");
+  }
+
+  // ── DRAFT watermark ──────────────────────────────────────────────────────────
   if (preview) {
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const pages = pdfDoc.getPages();
