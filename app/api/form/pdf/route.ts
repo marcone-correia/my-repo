@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFDocument, rgb, degrees, StandardFonts } from "pdf-lib";
+import { PDFDocument, PDFDict, PDFName, PDFNumber, rgb, degrees, StandardFonts } from "pdf-lib";
 import path from "path";
 import fs from "fs";
 import { getSessionByToken } from "@/lib/db";
@@ -39,6 +39,19 @@ async function fillPdf(
 
   const pdfBytes = fs.readFileSync(PDF_PATH);
   const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+
+  // pdf-lib throws when it encounters a rich text field (bit 26 of the Ff flag).
+  // Clear that flag on all such fields before accessing the form, so pdf-lib
+  // treats them as plain text fields and won't throw.
+  const RICH_TEXT_FLAG = 1 << 25; // PDF spec bit 26 (1-indexed) = bit 25 (0-indexed)
+  for (const [, obj] of pdfDoc.context.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFDict)) continue;
+    const ff = obj.lookupMaybe(PDFName.of("Ff"), PDFNumber);
+    if (ff && ff.asNumber() & RICH_TEXT_FLAG) {
+      obj.set(PDFName.of("Ff"), PDFNumber.of(ff.asNumber() & ~RICH_TEXT_FLAG));
+    }
+  }
+
   const form = pdfDoc.getForm();
 
   function setText(fieldName: string, value: string) {
