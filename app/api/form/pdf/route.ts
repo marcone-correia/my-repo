@@ -155,7 +155,7 @@ async function fillPdf(
     }
   }
 
-  form.flatten();
+  try { form.flatten(); } catch { /* rich text fields unsupported by pdf-lib — skip flattening */ }
   return pdfDoc.save();
 }
 
