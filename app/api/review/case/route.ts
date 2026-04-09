@@ -111,7 +111,7 @@ function detectFlaggedKeys(findings: Array<{ tier: string; document: string }>):
       }
     }
   }
-  return [...flagged];
+  return Array.from(flagged);
 }
 
 export async function POST(request: NextRequest) {
