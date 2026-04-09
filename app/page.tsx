@@ -121,7 +121,7 @@ function DemoLoader() {
       import("@/components/ReportView"),
       import("@/lib/demoReport"),
     ]).then(([rv, dr]) => {
-      setReportView(() => rv.default);
+      setReportView(() => rv.default as React.ComponentType<{ report: unknown; isDemo?: boolean }>);
       setDemoReport(dr.default);
       setLoaded(true);
     });
