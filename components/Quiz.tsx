@@ -8,49 +8,49 @@ import { IntakeAnswers } from "@/lib/intakeTypes";
 const QUESTIONS = [
   {
     key: "petitionerType" as const,
-    text: "Who is filing this green card petition?",
+    text: "Who is the petitioner — the person filing the green card petition?",
     options: [
       {
         value: "usc",
         label: "A U.S. citizen",
-        feedback: "Good — as an immediate relative of a U.S. citizen, there's no wait for a visa to become available. You can file right away.",
+        feedback: "When the petitioner is a U.S. citizen, there's no wait for a visa to become available — the case can be filed right away.",
       },
       {
         value: "lpr",
         label: "A permanent resident (green card holder)",
-        feedback: "As a permanent resident sponsor, there may be a waiting period before a visa is available. We'll factor this into your review.",
+        feedback: "When the petitioner is a permanent resident, there may be a waiting period before a visa becomes available. We'll factor this into the review.",
       },
     ],
   },
   {
     key: "entryMethod" as const,
-    text: "How did the applicant most recently enter the United States?",
+    text: "How did the immigrant (the person applying for the green card) most recently enter the United States?",
     options: [
       {
         value: "visa",
         label: "On a valid visa (tourist, student, work, or other)",
-        feedback: "This is one of the most common entry types for AOS filers. We'll check that your entry is correctly documented.",
+        feedback: "This is one of the most common entry types for adjustment of status filers. We'll check that the entry is correctly documented.",
       },
       {
         value: "advance_parole",
         label: "With an Advance Parole travel document",
-        feedback: "Important: your Advance Parole re-entry is the legal foundation of your eligibility to apply. We'll specifically check that this is documented correctly.",
+        feedback: "Important: the Advance Parole re-entry is the legal foundation of eligibility to apply from inside the U.S. We'll specifically check that this is documented correctly.",
       },
       {
         value: "without_inspection",
         label: "Without going through official border inspection",
-        feedback: "Entering without inspection may affect eligibility to adjust status inside the U.S. We'll flag this for paralegal review.",
+        feedback: "Entering without inspection may affect eligibility to adjust status inside the U.S. We'll flag this for review.",
       },
       {
         value: "other",
         label: "Other / not sure",
-        feedback: "No problem — we'll assess your entry documentation from what you upload.",
+        feedback: "No problem — we'll assess the entry documentation from what gets uploaded.",
       },
     ],
   },
   {
     key: "currentStatus" as const,
-    text: "What is the applicant's current immigration status?",
+    text: "What is the immigrant's current immigration status?",
     options: [
       {
         value: "daca",
@@ -60,17 +60,17 @@ const QUESTIONS = [
       {
         value: "valid_status",
         label: "Has a valid, unexpired visa or other lawful status",
-        feedback: "Maintaining lawful status strengthens your application. We'll confirm your status documents are in order.",
+        feedback: "Maintaining lawful status strengthens the application. We'll confirm the status documents are in order.",
       },
       {
         value: "overstay",
         label: "Had a status that has since expired",
-        feedback: "An expired status is common and doesn't automatically disqualify you — but the circumstances matter. We'll flag any concerns.",
+        feedback: "An expired status is common and doesn't automatically disqualify the case — but the circumstances matter. We'll flag any concerns.",
       },
       {
         value: "no_status",
         label: "No current immigration status",
-        feedback: "This may affect eligibility depending on how you entered. We'll flag this area for paralegal review.",
+        feedback: "This may affect eligibility depending on how the immigrant entered. We'll flag this area for review.",
       },
       {
         value: "unknown",
@@ -81,7 +81,7 @@ const QUESTIONS = [
   },
   {
     key: "priorRemoval" as const,
-    text: "Has the applicant ever been ordered to leave, deported, or removed from the U.S.?",
+    text: "Has the immigrant ever been ordered to leave, deported, or removed from the U.S.?",
     options: [
       {
         value: "no",
@@ -91,33 +91,33 @@ const QUESTIONS = [
       {
         value: "yes",
         label: "Yes",
-        feedback: "A prior removal order is a significant factor that requires attorney review before filing. We'll flag this clearly in your report.",
+        feedback: "A prior removal order is a significant factor. We'll flag this clearly in the report.",
       },
       {
         value: "unknown",
         label: "Not sure",
-        feedback: "We'll flag this for paralegal review — it's important to confirm before filing.",
+        feedback: "We'll flag this for review — it's important to confirm before filing.",
       },
     ],
   },
   {
     key: "filingStage" as const,
-    text: "Where are you in the green card process?",
+    text: "Where is this case in the green card process?",
     options: [
       {
         value: "concurrent",
         label: "Filing the petition and green card application together for the first time",
-        feedback: "This is called concurrent filing — the most common path for immediate relatives of U.S. citizens. We'll check for both the I-130 and I-485 in your package.",
+        feedback: "This is called concurrent filing — the most common path for immediate relatives of U.S. citizens. We'll check for both the I-130 and I-485 in the package.",
       },
       {
         value: "post_i130_approval",
         label: "The petition was already approved — now filing the green card application separately",
-        feedback: "You'll need your I-130 approval notice (the I-797) in your package. We'll check for it.",
+        feedback: "The I-130 approval notice (I-797) should be in the package. We'll check for it.",
       },
       {
         value: "unknown",
         label: "Not sure",
-        feedback: "No problem — we'll identify what stage you're at from your documents.",
+        feedback: "No problem — we'll identify the filing stage from the documents.",
       },
     ],
   },
@@ -146,13 +146,13 @@ function buildSummary(answers: IntakeAnswers): string {
   };
 
   const filingMap: Record<string, string> = {
-    concurrent:          "You're doing a concurrent filing, which means we'll check for both the I-130 petition and I-485 application.",
+    concurrent:          "This is a concurrent filing — we'll check for both the I-130 petition and I-485 application.",
     post_i130_approval:  "The I-130 petition was already approved — we'll check for the approval notice (I-797) and the I-485 application.",
-    unknown:             "We'll identify your filing stage from your documents.",
+    unknown:             "We'll identify the filing stage from the documents.",
   };
 
   const removalNote = answers.priorRemoval === "yes"
-    ? " The applicant has a prior removal order — we'll flag this prominently in your report."
+    ? " The immigrant has a prior removal order — we'll flag this prominently in the report."
     : "";
 
   const apNote = (answers.entryMethod === "advance_parole" || answers.currentStatus === "daca")
@@ -163,7 +163,7 @@ function buildSummary(answers: IntakeAnswers): string {
   const status = statusMap[answers.currentStatus] ?? "has an unclear status";
   const filing = filingMap[answers.filingStage]   ?? "";
 
-  return `You're filing as ${petitioner}. The applicant ${entry} and ${status}.${removalNote} ${filing}${apNote}`.trim();
+  return `The petitioner is ${petitioner}. The immigrant ${entry} and ${status}.${removalNote} ${filing}${apNote}`.trim();
 }
 
 export function buildCaseContext(answers: IntakeAnswers): string {
