@@ -198,7 +198,7 @@ const TOTAL_STEPS = 6;
 export default function Quiz({
   onComplete,
 }: {
-  onComplete: (answers: IntakeAnswers, caseContext: string) => void;
+  onComplete: (answers: IntakeAnswers) => void;
 }) {
   const [step, setStep]       = useState(0);
   const [answers, setAnswers] = useState<Partial<IntakeAnswers>>({});
@@ -229,8 +229,7 @@ export default function Quiz({
       return;
     }
     if (isSummary) {
-      const complete = answers as IntakeAnswers;
-      onComplete(complete, buildCaseContext(complete));
+      onComplete(answers as IntakeAnswers);
     }
   };
 
@@ -400,7 +399,7 @@ export default function Quiz({
               className="w-full rounded-xl py-3.5 px-6 text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: "#3d6b4a" }}
             >
-              Upload Your Documents →
+              Set Up My Case →
             </button>
 
             <div className="mt-4 text-center">

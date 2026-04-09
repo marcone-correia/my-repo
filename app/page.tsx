@@ -1,233 +1,132 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import ReportView, { ReviewReport } from "@/components/ReportView";
 import Quiz from "@/components/Quiz";
 import { IntakeAnswers } from "@/lib/intakeTypes";
-import demoReport from "@/lib/demoReport";
-
-type AppState = "intake" | "idle" | "loading" | "done" | "error";
-
-const ACCEPTED_EXT = ".pdf,.jpg,.jpeg,.png";
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function compressImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const MAX_DIM = 1600;
-      let { width, height } = img;
-      if (width > MAX_DIM || height > MAX_DIM) {
-        if (width > height) { height = Math.round((height * MAX_DIM) / width); width = MAX_DIM; }
-        else { width = Math.round((width * MAX_DIM) / height); height = MAX_DIM; }
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width; canvas.height = height;
-      canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-      resolve(dataUrl.split(",")[1]);
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
-}
-
-function getMediaType(file: File): "application/pdf" | "image/jpeg" | "image/png" | null {
-  if (file.type === "application/pdf") return "application/pdf";
-  if (file.type === "image/jpeg") return "image/jpeg";
-  if (file.type === "image/png") return "image/png";
-  if (file.name.endsWith(".pdf")) return "application/pdf";
-  if (file.name.endsWith(".jpg") || file.name.endsWith(".jpeg")) return "image/jpeg";
-  if (file.name.endsWith(".png")) return "image/png";
-  return null;
-}
+import { useRouter } from "next/navigation";
 
 export default function Home() {
+  const router = useRouter();
   const [isDemo, setIsDemo] = useState(false);
   useEffect(() => {
     setIsDemo(new URLSearchParams(window.location.search).get("demo") === "true");
   }, []);
 
-  const [files, setFiles] = useState<File[]>([]);
-  const [dragging, setDragging] = useState(false);
-  const [state, setState] = useState<AppState>("intake");
-  const [intake, setIntake] = useState<IntakeAnswers | null>(null);
-  const [caseContext, setCaseContext] = useState("");
-  const [report, setReport] = useState<ReviewReport | null>(null);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [progressMsg, setProgressMsg] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [state, setState]         = useState<"intake" | "idle" | "creating">("intake");
+  const [resumeCode, setResumeCode] = useState("");
+  const [resumeError, setResumeError] = useState("");
+  const [resumeLoading, setResumeLoading] = useState(false);
 
-  const addFiles = useCallback((incoming: File[]) => {
-    const valid = incoming.filter((f) => getMediaType(f) !== null);
-    setFiles((prev) => {
-      const existing = new Set(prev.map((f) => f.name + f.size));
-      return [...prev, ...valid.filter((f) => !existing.has(f.name + f.size))];
-    });
-  }, []);
-
-  const onDrop = useCallback((e: React.DragEvent) => { e.preventDefault(); setDragging(false); addFiles(Array.from(e.dataTransfer.files)); }, [addFiles]);
-  const onDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragging(true); };
-  const onDragLeave = () => setDragging(false);
-  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files) addFiles(Array.from(e.target.files)); };
-
-  const MAX_PDF_BYTES = 40 * 1024 * 1024; // 40 MB — PDFs only (images are compressed before this check)
-
-  const runReview = async () => {
-    if (files.length === 0) return;
-    const pdfSize = files.filter(f => getMediaType(f) === "application/pdf").reduce((sum, f) => sum + f.size, 0);
-    if (pdfSize > MAX_PDF_BYTES) {
-      setErrorMsg(`Your PDFs total ${(pdfSize / 1024 / 1024).toFixed(1)} MB, which exceeds the 40 MB limit. Try splitting the review into two batches.`);
-      setState("error");
-      return;
-    }
-    setState("loading"); setReport(null); setErrorMsg(""); setProgressMsg("");
+  // After quiz completes: create a session with intake answers → redirect to dashboard
+  const handleQuizComplete = useCallback(async (answers: IntakeAnswers) => {
+    setState("creating");
     try {
-      const filePayloads = await Promise.all(files.map(async (file) => {
-        const mediaType = getMediaType(file)!;
-        const isPdf = mediaType === "application/pdf";
-        const data = isPdf ? await fileToBase64(file) : await compressImage(file);
-        return { filename: file.name, mediaType: isPdf ? mediaType : "image/jpeg" as const, data };
-      }));
-      const res = await fetch("/api/review", {
+      const res = await fetch("/api/form/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ files: filePayloads, intake, caseContext }),
+        body: JSON.stringify({ intakeAnswers: answers }),
       });
-      if (!res.ok || !res.body) throw new Error("Something went wrong.");
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const msg = JSON.parse(line);
-          if (msg.type === "progress") setProgressMsg(msg.message);
-          else if (msg.type === "result") { setReport(msg.report as ReviewReport); setState("done"); }
-          else if (msg.type === "error") throw new Error(msg.message);
-        }
+      if (!res.ok) throw new Error("Failed to create session.");
+      const { magicToken } = await res.json();
+      router.push(`/dashboard/${magicToken}`);
+    } catch {
+      // Fall back to showing the upload UI if something went wrong
+      setState("idle");
+    }
+  }, [router]);
+
+  const handleResume = async () => {
+    const code = resumeCode.trim().toUpperCase();
+    if (!code) return;
+    setResumeLoading(true);
+    setResumeError("");
+    try {
+      const res = await fetch(`/api/form/session?code=${encodeURIComponent(code)}`);
+      if (!res.ok) {
+        setResumeError("Code not found — double-check and try again.");
+        setResumeLoading(false);
+        return;
       }
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "An unexpected error occurred.");
-      setState("error");
+      const session = await res.json();
+      router.push(`/dashboard/${session.magic_token}`);
+    } catch {
+      setResumeError("Something went wrong. Please try again.");
+      setResumeLoading(false);
     }
   };
 
-  const handleQuizComplete = (answers: IntakeAnswers, context: string) => {
-    setIntake(answers);
-    setCaseContext(context);
-    setState("idle");
-  };
+  if (isDemo) {
+    // Lazy-load demo mode to avoid importing heavy deps when not needed
+    return <DemoLoader />;
+  }
 
-  const reset = () => { setFiles([]); setReport(null); setErrorMsg(""); setProgressMsg(""); setIntake(null); setCaseContext(""); setState("intake"); };
-
-  if (isDemo) return <ReportView report={demoReport} isDemo />;
   if (state === "intake") return <Quiz onComplete={handleQuizComplete} />;
-  if (state === "done" && report) return <ReportView report={report} onReset={reset} />;
 
+  if (state === "creating") {
+    return (
+      <div className="min-h-screen bg-[#FAF9F7] flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block w-8 h-8 border-2 border-stone-300 border-t-[#3d6b4a] rounded-full animate-spin mb-4" />
+          <p className="text-stone-500 text-sm">Setting up your case…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // idle — shouldn't normally be reached in new flow, kept as fallback
   return (
     <main className="max-w-2xl mx-auto px-4 py-12">
       <header className="mb-10">
         <h1 className="font-serif text-3xl font-bold text-stone-900 tracking-tight">Throughline</h1>
         <p className="mt-2 text-stone-500 text-sm leading-relaxed">
-          Now upload your documents — all at once is fine.
+          Have a case code? Pick up where you left off.
         </p>
       </header>
 
-      {/* I-485 Assistant entry point */}
-      <div className="mb-10 bg-white border border-stone-200 rounded-xl px-5 py-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold text-stone-800">Filling out your I-485?</p>
-          <p className="text-xs text-stone-500 mt-0.5">Answer questions one at a time and we'll fill out the official form for you.</p>
-        </div>
-        <a
-          href="/form"
-          className="flex-shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 whitespace-nowrap"
-          style={{ backgroundColor: "#3d6b4a" }}
-        >
-          Start I-485 →
-        </a>
-      </div>
-
-      {state !== "done" && (
-        <>
-          <div
-            onClick={() => inputRef.current?.click()}
-            onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave}
-            className={`relative cursor-pointer rounded-xl border-2 border-dashed px-8 py-12 text-center transition-colors ${dragging ? "border-sage-600 bg-sage-600/5" : "border-stone-300 bg-white hover:border-stone-400 hover:bg-stone-50"}`}
+      <div className="bg-white border border-stone-200 rounded-xl px-5 py-5">
+        <p className="text-sm font-semibold text-stone-800 mb-1">Resume your case</p>
+        <p className="text-xs text-stone-500 mb-3">Enter your access code (e.g. TL-4X9K)</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={resumeCode}
+            onChange={(e) => setResumeCode(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === "Enter" && handleResume()}
+            placeholder="TL-XXXX"
+            className="flex-1 rounded-lg border border-stone-200 px-3 py-2 text-sm font-mono text-stone-800 placeholder-stone-400 focus:outline-none focus:border-[#3d6b4a] focus:ring-1 focus:ring-[#3d6b4a]"
+          />
+          <button
+            onClick={handleResume}
+            disabled={resumeLoading || !resumeCode.trim()}
+            className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: "#3d6b4a" }}
           >
-            <input ref={inputRef} type="file" multiple accept={ACCEPTED_EXT} className="sr-only" onChange={onInputChange} />
-            <div className="pointer-events-none">
-              <svg className="mx-auto mb-3 h-10 w-10 text-stone-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-              </svg>
-              <p className="text-sm font-medium text-stone-600">Drop files here, or click to browse</p>
-              <p className="mt-1 text-xs text-stone-400">PDF, JPG, PNG — multiple files accepted</p>
-            </div>
-          </div>
-
-          {files.length > 0 && (
-            <ul className="mt-4 space-y-2">
-              {files.map((file, i) => (
-                <li key={i} className="flex items-center justify-between rounded-lg bg-white border border-stone-200 px-4 py-2.5">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="flex-shrink-0 text-stone-400 text-sm">{file.name.endsWith(".pdf") ? "📄" : "🖼"}</span>
-                    <span className="truncate text-sm text-stone-700">{file.name}</span>
-                    <span className="flex-shrink-0 text-xs text-stone-400">{(file.size / 1024).toFixed(0)} KB</span>
-                  </div>
-                  <button onClick={() => setFiles((p) => p.filter((_, j) => j !== i))} className="flex-shrink-0 ml-3 text-stone-400 hover:text-stone-600 transition-colors" aria-label="Remove file">×</button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="mt-6">
-            <button
-              onClick={runReview}
-              disabled={files.length === 0 || state === "loading"}
-              className={`w-full rounded-lg py-3 px-6 text-sm font-medium transition-colors ${files.length === 0 || state === "loading" ? "bg-stone-200 text-stone-400 cursor-not-allowed" : "text-white"}`}
-              style={files.length > 0 && state !== "loading" ? { backgroundColor: "#3d6b4a" } : undefined}
-            >
-              {state === "loading" ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  {progressMsg || "Reviewing your documents…"}
-                </span>
-              ) : "Run Review"}
-            </button>
-            {files.length > 0 && state === "idle" && (
-              <p className="mt-2 text-center text-xs text-stone-400">{files.length} file{files.length !== 1 ? "s" : ""} selected</p>
-            )}
-          </div>
-        </>
-      )}
-
-      {state === "error" && (
-        <div className="mt-4 rounded-lg bg-red-50 border border-red-200 px-5 py-4">
-          <p className="text-sm font-medium text-red-800">Something went wrong</p>
-          <p className="mt-1 text-sm text-red-700">{errorMsg}</p>
-          <button onClick={reset} className="mt-3 text-sm text-red-700 underline underline-offset-2 hover:text-red-900">Try again</button>
+            {resumeLoading ? "…" : "Resume →"}
+          </button>
         </div>
-      )}
-
+        {resumeError && <p className="mt-2 text-xs text-red-600">{resumeError}</p>}
+      </div>
     </main>
   );
+}
+
+// Demo loader — only imported when ?demo=true
+function DemoLoader() {
+  const [loaded, setLoaded] = useState(false);
+  const [ReportView, setReportView] = useState<React.ComponentType<{ report: unknown; isDemo?: boolean }> | null>(null);
+  const [demoReport, setDemoReport] = useState<unknown>(null);
+
+  useEffect(() => {
+    Promise.all([
+      import("@/components/ReportView"),
+      import("@/lib/demoReport"),
+    ]).then(([rv, dr]) => {
+      setReportView(() => rv.default);
+      setDemoReport(dr.default);
+      setLoaded(true);
+    });
+  }, []);
+
+  if (!loaded || !ReportView || !demoReport) return null;
+  return <ReportView report={demoReport} isDemo />;
 }

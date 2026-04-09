@@ -547,7 +547,10 @@ export default function FormAssistant({ token }: Props) {
       {/* Header */}
       <header className="sticky top-0 z-20 bg-[#FAF9F7] border-b border-stone-200">
         <div className="max-w-5xl mx-auto px-6 h-12 flex items-center justify-between">
-          <a href="/" className="font-serif text-lg font-bold text-stone-900 tracking-tight">Throughline</a>
+          <div className="flex items-center gap-4">
+            <a href={`/dashboard/${token}`} className="text-sm text-stone-400 hover:text-stone-600 transition-colors">← Dashboard</a>
+            <a href="/" className="font-serif text-lg font-bold text-stone-900 tracking-tight">Throughline</a>
+          </div>
           <div className="flex items-center gap-4">
             {saveStatus === "saved" && <span className="text-xs text-[#3d6b4a]">✓ Saved</span>}
             {saveStatus === "error" && <span className="text-xs text-red-500">Save failed</span>}
