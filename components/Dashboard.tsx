@@ -641,7 +641,7 @@ export default function Dashboard({ session }: { session: FormSession }) {
       </header>
 
       {/* Case summary bar */}
-      {intake && (
+      {intake && intake.petitionerType && (
         <div className="bg-white border-b border-stone-100">
           <div className="max-w-4xl mx-auto px-4 py-2.5">
             <p className="text-xs text-stone-500">{caseSummaryLine(intake)}</p>
