@@ -312,7 +312,7 @@ export default function Quiz({
             <p className="mt-4 text-xs text-stone-400 text-center">Takes about 2 minutes. Your answers are confidential.</p>
 
             <p className="mt-6 text-xs text-stone-400 leading-relaxed text-center">
-              Throughline is an educational tool and does not constitute legal advice. Always consult a licensed immigration attorney before filing.
+              Throughline is an educational tool and does not constitute legal advice.
             </p>
           </div>
         )}
