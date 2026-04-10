@@ -146,19 +146,26 @@ function DocCard({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleFile = useCallback(async (file: File) => {
     setUploading(true);
+    setUploadError(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("docType", def.key);
       fd.append("token", token);
       const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
-      if (!res.ok) throw new Error("Upload failed.");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Upload failed.");
+      }
       const { document } = await res.json();
       onUploaded(def.key, document);
-    } catch { /* silently fail for now */ }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed.");
+    }
     setUploading(false);
   }, [def.key, token, onUploaded]);
 
@@ -190,33 +197,38 @@ function DocCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 flex-shrink-0">
-        {def.isI485 && (
-          <a
-            href={`/form/${token}`}
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#3d6b4a] text-[#3d6b4a] hover:bg-[#EEF5E8] transition-colors whitespace-nowrap"
-          >
-            {isI485Complete ? "Download ↓" : progress! > 0 ? `${progress}% done →` : "Fill with Throughline →"}
-          </a>
-        )}
-        {entry ? (
-          <button
-            onClick={handleDelete}
-            className="text-xs text-stone-400 hover:text-red-500 transition-colors px-1"
-            title="Remove"
-          >×</button>
-        ) : (
-          <>
-            <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="sr-only"
-              onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }} />
-            <button
-              onClick={() => inputRef.current?.click()}
-              disabled={uploading}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          {def.isI485 && (
+            <a
+              href={`/form/${token}`}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[#3d6b4a] text-[#3d6b4a] hover:bg-[#EEF5E8] transition-colors whitespace-nowrap"
             >
-              {uploading ? "Uploading…" : "Upload"}
-            </button>
-          </>
+              {isI485Complete ? "Download ↓" : progress! > 0 ? `${progress}% done →` : "Fill with Throughline →"}
+            </a>
+          )}
+          {entry ? (
+            <button
+              onClick={handleDelete}
+              className="text-xs text-stone-400 hover:text-red-500 transition-colors px-1"
+              title="Remove"
+            >×</button>
+          ) : (
+            <>
+              <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="sr-only"
+                onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }} />
+              <button
+                onClick={() => { setUploadError(null); inputRef.current?.click(); }}
+                disabled={uploading}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+              >
+                {uploading ? "Uploading…" : "Upload"}
+              </button>
+            </>
+          )}
+        </div>
+        {uploadError && (
+          <p className="text-[10px] text-red-600 max-w-[160px] text-right leading-tight">{uploadError}</p>
         )}
       </div>
     </div>
@@ -713,19 +725,19 @@ export default function Dashboard({ session }: { session: FormSession }) {
       </div>
 
       {/* Sticky footer review bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-stone-900 border-t border-stone-700 px-4 py-3">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-stone-200 px-4 py-3 shadow-[0_-2px_12px_rgba(0,0,0,0.08)]">
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
-          <p className="text-sm text-stone-300">
+          <p className="text-sm text-stone-500">
             {uploadedCount > 0
-              ? <><span className="font-semibold text-white">{uploadedCount} document{uploadedCount !== 1 ? "s" : ""}</span> uploaded{lastReport ? " · Reviewed" : ""}</>
-              : <span className="text-stone-400">Upload documents to run your review</span>
+              ? <><span className="font-semibold text-stone-800">{uploadedCount} document{uploadedCount !== 1 ? "s" : ""}</span> uploaded{lastReport ? " · Reviewed" : ""}</>
+              : <span className="text-stone-400">Upload documents above to run your review</span>
             }
           </p>
           <button
             onClick={() => setReviewOpen(true)}
             disabled={uploadedCount === 0}
             className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 flex-shrink-0"
-            style={{ backgroundColor: uploadedCount > 0 ? "#3d6b4a" : "#555" }}
+            style={{ backgroundColor: "#3d6b4a" }}
           >
             {lastReport ? "View / Re-run Review" : "Run Case Readiness Review"}
           </button>
