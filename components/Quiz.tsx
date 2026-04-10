@@ -197,12 +197,30 @@ const TOTAL_STEPS = 6;
 
 export default function Quiz({
   onComplete,
+  onResume,
 }: {
   onComplete: (answers: IntakeAnswers) => void;
+  onResume?: (code: string) => Promise<void>;
 }) {
   const [step, setStep]       = useState(0);
   const [answers, setAnswers] = useState<Partial<IntakeAnswers>>({});
   const [selected, setSelected] = useState<string | null>(null);
+  const [resumeCode, setResumeCode]     = useState("");
+  const [resumeError, setResumeError]   = useState("");
+  const [resumeLoading, setResumeLoading] = useState(false);
+
+  const handleResume = async () => {
+    const code = resumeCode.trim().toUpperCase();
+    if (!code || !onResume) return;
+    setResumeLoading(true);
+    setResumeError("");
+    try {
+      await onResume(code);
+    } catch {
+      setResumeError("Code not found — double-check and try again.");
+      setResumeLoading(false);
+    }
+  };
 
   const isWelcome  = step === 0;
   const isSummary  = step === 6;
@@ -277,7 +295,7 @@ export default function Quiz({
             </div>
 
             <h1 className="font-serif text-3xl font-bold text-stone-900 tracking-tight mb-3 text-center">
-              Green Card Document Review
+              Let's Start Your Green Card Application.
             </h1>
             <p className="text-stone-500 text-[15px] leading-relaxed mb-8 text-center">
               We'll ask 5 quick questions about your case, then you'll upload your documents. Throughline will check everything and tell you exactly what's ready, what's missing, and what to fix — based on official USCIS filing requirements.
@@ -310,6 +328,32 @@ export default function Quiz({
             </button>
 
             <p className="mt-4 text-xs text-stone-400 text-center">Takes about 2 minutes. Your answers are confidential.</p>
+
+            {onResume && (
+              <div className="mt-8 pt-6 border-t border-stone-200">
+                <p className="text-sm font-semibold text-stone-700 mb-1">Already have a case?</p>
+                <p className="text-xs text-stone-400 mb-3">Enter your access code to pick up where you left off.</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={resumeCode}
+                    onChange={(e) => { setResumeCode(e.target.value.toUpperCase()); setResumeError(""); }}
+                    onKeyDown={(e) => e.key === "Enter" && handleResume()}
+                    placeholder="TL-XXXX"
+                    className="flex-1 rounded-lg border border-stone-200 px-3 py-2 text-sm font-mono text-stone-800 placeholder-stone-400 focus:outline-none focus:border-[#3d6b4a] focus:ring-1 focus:ring-[#3d6b4a]"
+                  />
+                  <button
+                    onClick={handleResume}
+                    disabled={resumeLoading || !resumeCode.trim()}
+                    className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{ backgroundColor: "#3d6b4a" }}
+                  >
+                    {resumeLoading ? "…" : "Resume →"}
+                  </button>
+                </div>
+                {resumeError && <p className="mt-2 text-xs text-red-600">{resumeError}</p>}
+              </div>
+            )}
 
             <p className="mt-6 text-xs text-stone-400 leading-relaxed text-center">
               Throughline is an educational tool and does not constitute legal advice.
