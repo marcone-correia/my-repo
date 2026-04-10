@@ -19,8 +19,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Upload to Vercel Blob
-    const pathname = `cases/${token}/${docType}/${file.name}`;
-    const blob = await put(pathname, file, { access: "public" });
+    let blob;
+    try {
+      const pathname = `cases/${token}/${docType}/${file.name}`;
+      blob = await put(pathname, file, { access: "public" });
+    } catch (err) {
+      console.error("Blob upload failed:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: `Blob upload failed: ${msg}` }, { status: 500 });
+    }
 
     // Update documents in session
     const existing = session.documents ?? {};
@@ -31,11 +38,18 @@ export async function POST(request: NextRequest) {
       flagged:    false,
     };
     const updated = { ...existing, [docType]: entry };
-    await saveDocuments(token, updated);
+    try {
+      await saveDocuments(token, updated);
+    } catch (err) {
+      console.error("DB save failed:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: `DB save failed: ${msg}` }, { status: 500 });
+    }
 
     return NextResponse.json({ ok: true, document: entry });
   } catch (err) {
     console.error("Document upload failed:", err);
-    return NextResponse.json({ error: "Upload failed." }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
