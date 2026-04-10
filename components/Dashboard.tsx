@@ -153,10 +153,12 @@ function DocCard({
     setUploading(true);
     setUploadError(null);
     try {
-      const blob = await upload(`cases/${token}/${def.key}/${file.name}`, file, {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const blob = await upload(`cases/${token}/${def.key}/${safeName}`, file, {
         access: "private",
         handleUploadUrl: "/api/documents/upload",
         clientPayload: JSON.stringify({ token, docType: def.key }),
+        multipart: true,
       });
       const entry: DocumentEntry = {
         url: blob.url,
@@ -166,7 +168,8 @@ function DocCard({
       };
       onUploaded(def.key, entry);
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed.");
+      console.error("Upload error:", err);
+      setUploadError(err instanceof Error ? err.message : String(err));
     }
     setUploading(false);
   }, [def.key, token, onUploaded]);
@@ -345,10 +348,12 @@ function BulkUploadPanel({
       }
       setQueue((prev) => prev.map((q) => q.file === item.file ? { ...q, status: "uploading" } : q));
       try {
-        const blob = await upload(`cases/${token}/${key}/${item.file.name}`, item.file, {
+        const safeName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const blob = await upload(`cases/${token}/${key}/${safeName}`, item.file, {
           access: "private",
           handleUploadUrl: "/api/documents/upload",
           clientPayload: JSON.stringify({ token, docType: key }),
+          multipart: true,
         });
         const entry: DocumentEntry = {
           url: blob.url,
@@ -375,10 +380,12 @@ function BulkUploadPanel({
     const item = queue[fileIndex];
     setQueue((prev) => prev.map((q, i) => i === fileIndex ? { ...q, status: "uploading", assignedKey: key } : q));
     try {
-      const blob = await upload(`cases/${token}/${key}/${item.file.name}`, item.file, {
+      const safeName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const blob = await upload(`cases/${token}/${key}/${safeName}`, item.file, {
         access: "private",
         handleUploadUrl: "/api/documents/upload",
         clientPayload: JSON.stringify({ token, docType: key }),
+        multipart: true,
       });
       const entry: DocumentEntry = {
         url: blob.url,
