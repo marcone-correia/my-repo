@@ -1,55 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/next";
 import { getSessionByToken, saveDocuments, DocumentEntry } from "@/lib/db";
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
+  const body = (await request.json()) as HandleUploadBody;
+
   try {
-    const formData = await request.formData();
-    const file    = formData.get("file") as File | null;
-    const docType = formData.get("docType") as string | null;
-    const token   = formData.get("token") as string | null;
+    const jsonResponse = await handleUpload({
+      body,
+      request,
+      onBeforeGenerateToken: async (_pathname, clientPayload) => {
+        const { token } = JSON.parse(clientPayload ?? "{}");
+        if (!token) throw new Error("token required");
+        const session = await getSessionByToken(token);
+        if (!session) throw new Error("Session not found");
 
-    if (!file || !docType || !token) {
-      return NextResponse.json({ error: "file, docType, and token are required." }, { status: 400 });
-    }
+        return {
+          access: "private" as const,
+          allowedContentTypes: ["image/jpeg", "image/png", "application/pdf"],
+          maximumSizeInBytes: 200 * 1024 * 1024, // 200MB
+          tokenPayload: clientPayload ?? "",
+        };
+      },
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        const { token, docType } = JSON.parse(tokenPayload ?? "{}");
+        if (!token || !docType) return;
+        const session = await getSessionByToken(token);
+        if (!session) return;
 
-    const session = await getSessionByToken(token);
-    if (!session) {
-      return NextResponse.json({ error: "Session not found." }, { status: 404 });
-    }
+        const filename = decodeURIComponent(blob.pathname.split("/").pop() ?? blob.pathname);
+        const entry: DocumentEntry = {
+          url: blob.url,
+          filename,
+          uploadedAt: new Date().toISOString(),
+          flagged: false,
+        };
+        await saveDocuments(token, { ...(session.documents ?? {}), [docType]: entry });
+      },
+    });
 
-    // Upload to Vercel Blob
-    let blob;
-    try {
-      const pathname = `cases/${token}/${docType}/${file.name}`;
-      blob = await put(pathname, file, { access: "private" });
-    } catch (err) {
-      console.error("Blob upload failed:", err);
-      const msg = err instanceof Error ? err.message : String(err);
-      return NextResponse.json({ error: `Blob upload failed: ${msg}` }, { status: 500 });
-    }
-
-    // Update documents in session
-    const existing = session.documents ?? {};
-    const entry: DocumentEntry = {
-      url:        blob.url,
-      filename:   file.name,
-      uploadedAt: new Date().toISOString(),
-      flagged:    false,
-    };
-    const updated = { ...existing, [docType]: entry };
-    try {
-      await saveDocuments(token, updated);
-    } catch (err) {
-      console.error("DB save failed:", err);
-      const msg = err instanceof Error ? err.message : String(err);
-      return NextResponse.json({ error: `DB save failed: ${msg}` }, { status: 500 });
-    }
-
-    return NextResponse.json({ ok: true, document: entry });
+    return NextResponse.json(jsonResponse);
   } catch (err) {
-    console.error("Document upload failed:", err);
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    const msg = err instanceof Error ? err.message : "Upload failed";
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

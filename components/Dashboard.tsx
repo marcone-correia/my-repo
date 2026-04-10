@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { upload } from "@vercel/blob/client";
 import type { FormSession, DocumentEntry } from "@/lib/db";
 import type { IntakeAnswers } from "@/lib/intakeTypes";
 import { ReviewReport } from "@/components/ReportView";
@@ -152,17 +153,18 @@ function DocCard({
     setUploading(true);
     setUploadError(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("docType", def.key);
-      fd.append("token", token);
-      const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? "Upload failed.");
-      }
-      const { document } = await res.json();
-      onUploaded(def.key, document);
+      const blob = await upload(`cases/${token}/${def.key}/${file.name}`, file, {
+        access: "private",
+        handleUploadUrl: "/api/documents/upload",
+        clientPayload: JSON.stringify({ token, docType: def.key }),
+      });
+      const entry: DocumentEntry = {
+        url: blob.url,
+        filename: file.name,
+        uploadedAt: new Date().toISOString(),
+        flagged: false,
+      };
+      onUploaded(def.key, entry);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed.");
     }
@@ -343,16 +345,19 @@ function BulkUploadPanel({
       }
       setQueue((prev) => prev.map((q) => q.file === item.file ? { ...q, status: "uploading" } : q));
       try {
-        const fd = new FormData();
-        fd.append("file", item.file);
-        fd.append("docType", key);
-        fd.append("token", token);
-        const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
-        if (res.ok) {
-          const { document } = await res.json();
-          onUploaded(key, document);
-          setQueue((prev) => prev.map((q) => q.file === item.file ? { ...q, status: "done" } : q));
-        }
+        const blob = await upload(`cases/${token}/${key}/${item.file.name}`, item.file, {
+          access: "private",
+          handleUploadUrl: "/api/documents/upload",
+          clientPayload: JSON.stringify({ token, docType: key }),
+        });
+        const entry: DocumentEntry = {
+          url: blob.url,
+          filename: item.file.name,
+          uploadedAt: new Date().toISOString(),
+          flagged: false,
+        };
+        onUploaded(key, entry);
+        setQueue((prev) => prev.map((q) => q.file === item.file ? { ...q, status: "done" } : q));
       } catch {
         setQueue((prev) => prev.map((q) => q.file === item.file ? { ...q, status: "unassigned" } : q));
       }
@@ -370,16 +375,19 @@ function BulkUploadPanel({
     const item = queue[fileIndex];
     setQueue((prev) => prev.map((q, i) => i === fileIndex ? { ...q, status: "uploading", assignedKey: key } : q));
     try {
-      const fd = new FormData();
-      fd.append("file", item.file);
-      fd.append("docType", key);
-      fd.append("token", token);
-      const res = await fetch("/api/documents/upload", { method: "POST", body: fd });
-      if (res.ok) {
-        const { document } = await res.json();
-        onUploaded(key, document);
-        setQueue((prev) => prev.map((q, i) => i === fileIndex ? { ...q, status: "done" } : q));
-      }
+      const blob = await upload(`cases/${token}/${key}/${item.file.name}`, item.file, {
+        access: "private",
+        handleUploadUrl: "/api/documents/upload",
+        clientPayload: JSON.stringify({ token, docType: key }),
+      });
+      const entry: DocumentEntry = {
+        url: blob.url,
+        filename: item.file.name,
+        uploadedAt: new Date().toISOString(),
+        flagged: false,
+      };
+      onUploaded(key, entry);
+      setQueue((prev) => prev.map((q, i) => i === fileIndex ? { ...q, status: "done" } : q));
     } catch {
       setQueue((prev) => prev.map((q, i) => i === fileIndex ? { ...q, status: "unassigned" } : q));
     }
