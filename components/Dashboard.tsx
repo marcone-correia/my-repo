@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import type { FormSession, DocumentEntry } from "@/lib/db";
 import type { IntakeAnswers } from "@/lib/intakeTypes";
-import ReportView, { ReviewReport } from "@/components/ReportView";
+import { ReviewReport } from "@/components/ReportView";
 import { SECTIONS } from "@/lib/formDefinition";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -275,132 +275,6 @@ function DocSection({
   );
 }
 
-// ─── Review panel (slide-up) ──────────────────────────────────────────────────
-
-function ReviewPanel({
-  token,
-  docs,
-  initialReport,
-  onClose,
-  onReportReady,
-}: {
-  token: string;
-  docs: DocMap;
-  initialReport: ReviewReport | null;
-  onClose: () => void;
-  onReportReady: (r: ReviewReport) => void;
-}) {
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [progress, setProgress] = useState("");
-  const [report, setReport] = useState<ReviewReport | null>(initialReport);
-  const uploadedDocs = Object.entries(docs).filter(([, d]) => d);
-
-  const startReview = async () => {
-    if (uploadedDocs.length === 0) return;
-    setStatus("loading");
-    setProgress("Starting review…");
-    try {
-      const res = await fetch("/api/review/case", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      if (!res.ok || !res.body) throw new Error("Review failed.");
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const msg = JSON.parse(line);
-          if (msg.type === "progress") setProgress(msg.message);
-          else if (msg.type === "result") {
-            setReport(msg.report as ReviewReport);
-            onReportReady(msg.report as ReviewReport);
-            setStatus("done");
-          } else if (msg.type === "error") throw new Error(msg.message);
-        }
-      }
-    } catch (err) {
-      setProgress(err instanceof Error ? err.message : "Review failed.");
-      setStatus("error");
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col" onClick={onClose}>
-      {/* Backdrop */}
-      <div className="flex-1 bg-black/40" />
-      {/* Panel */}
-      <div
-        className="bg-white rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100">
-          <h2 className="font-semibold text-stone-900">Case Readiness Review</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-xl leading-none">×</button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {status === "idle" && !report && (
-            <div>
-              <p className="text-sm text-stone-600 mb-4">
-                Throughline will review all {uploadedDocs.length} uploaded document{uploadedDocs.length !== 1 ? "s" : ""} and check them against USCIS filing requirements.
-              </p>
-              <ul className="space-y-1 mb-6">
-                {uploadedDocs.map(([key, d]) => (
-                  <li key={key} className="flex items-center gap-2 text-sm text-stone-700">
-                    <span className="text-[#3d6b4a]">✓</span>{d.filename}
-                  </li>
-                ))}
-              </ul>
-              {uploadedDocs.length === 0 && (
-                <p className="text-sm text-stone-500">Upload at least one document to run a review.</p>
-              )}
-            </div>
-          )}
-
-          {status === "loading" && (
-            <div className="flex flex-col items-center py-10 gap-3">
-              <div className="w-8 h-8 border-2 border-stone-200 border-t-[#3d6b4a] rounded-full animate-spin" />
-              <p className="text-sm text-stone-500 text-center">{progress}</p>
-            </div>
-          )}
-
-          {status === "error" && (
-            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3">
-              <p className="text-sm font-medium text-red-800">Review failed</p>
-              <p className="text-sm text-red-700 mt-1">{progress}</p>
-            </div>
-          )}
-
-          {(status === "done" || (status === "idle" && report)) && report && (
-            <ReportView report={report} />
-          )}
-        </div>
-
-        {(status === "idle" || status === "error") && (
-          <div className="px-6 py-4 border-t border-stone-100">
-            <button
-              onClick={startReview}
-              disabled={uploadedDocs.length === 0}
-              className="w-full rounded-xl py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-              style={{ backgroundColor: "#3d6b4a" }}
-            >
-              {report ? "Run Again" : `Start Review →`}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Bulk upload panel ────────────────────────────────────────────────────────
 
 function BulkUploadPanel({
@@ -585,8 +459,7 @@ export default function Dashboard({ session }: { session: FormSession }) {
   const intake = (session.intake_answers ?? null) as IntakeAnswers | null;
 
   const [docs, setDocs]               = useState<DocMap>(session.documents ?? {});
-  const [reviewOpen, setReviewOpen]   = useState(false);
-  const [lastReport, setLastReport]   = useState<ReviewReport | null>((session.last_review as ReviewReport | null) ?? null);
+  const [lastReport]                  = useState<ReviewReport | null>((session.last_review as ReviewReport | null) ?? null);
   const [privacyDismissed, setPrivacyDismissed] = useState(false);
   const [copied, setCopied]           = useState(false);
   const [deleting, setDeleting]       = useState(false);
@@ -613,16 +486,6 @@ export default function Dashboard({ session }: { session: FormSession }) {
   const handleDeleted = useCallback((key: string) => {
     setDocs((prev) => { const n = { ...prev }; delete n[key]; return n; });
   }, []);
-
-  const handleReportReady = useCallback((r: ReviewReport) => {
-    setLastReport(r);
-    // Reload session state so flagged indicators reflect the new review
-    // (flagDocuments already updated the DB server-side)
-    fetch(`/api/form/session?token=${token}`)
-      .then((r) => r.json())
-      .then((s) => { if (s.documents) setDocs(s.documents); })
-      .catch(() => {});
-  }, [token]);
 
   const deleteCase = async () => {
     if (!confirm("Delete your entire case and all uploaded files? This cannot be undone.")) return;
@@ -729,31 +592,20 @@ export default function Dashboard({ session }: { session: FormSession }) {
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
           <p className="text-sm text-stone-500">
             {uploadedCount > 0
-              ? <><span className="font-semibold text-stone-800">{uploadedCount} document{uploadedCount !== 1 ? "s" : ""}</span> uploaded{lastReport ? " · Reviewed" : ""}</>
+              ? <><span className="font-semibold text-stone-800">{uploadedCount} document{uploadedCount !== 1 ? "s" : ""}</span> uploaded{lastReport ? " · Previously reviewed" : ""}</>
               : <span className="text-stone-400">Upload documents above to run your review</span>
             }
           </p>
-          <button
-            onClick={() => setReviewOpen(true)}
-            disabled={uploadedCount === 0}
-            className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40 flex-shrink-0"
+          <a
+            href={uploadedCount > 0 ? `/dashboard/${token}/report` : undefined}
+            aria-disabled={uploadedCount === 0}
+            className={`rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity flex-shrink-0 ${uploadedCount === 0 ? "opacity-40 pointer-events-none" : "hover:opacity-90"}`}
             style={{ backgroundColor: "#3d6b4a" }}
           >
             {lastReport ? "View / Re-run Review" : "Run Case Readiness Review"}
-          </button>
+          </a>
         </div>
       </div>
-
-      {/* Review panel */}
-      {reviewOpen && (
-        <ReviewPanel
-          token={token}
-          docs={docs}
-          initialReport={lastReport}
-          onClose={() => setReviewOpen(false)}
-          onReportReady={handleReportReady}
-        />
-      )}
     </div>
   );
 }
