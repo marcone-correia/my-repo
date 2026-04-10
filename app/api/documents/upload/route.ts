@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/next";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { getSessionByToken, saveDocuments, DocumentEntry } from "@/lib/db";
 
 export async function POST(request: NextRequest): Promise<Response> {
