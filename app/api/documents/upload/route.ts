@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     let blob;
     try {
       const pathname = `cases/${token}/${docType}/${file.name}`;
-      blob = await put(pathname, file, { access: "public" });
+      blob = await put(pathname, file, { access: "private" });
     } catch (err) {
       console.error("Blob upload failed:", err);
       const msg = err instanceof Error ? err.message : String(err);

@@ -138,7 +138,11 @@ export async function POST(request: NextRequest) {
         const files: UploadedFile[] = [];
         for (const entry of entries) {
           try {
-            const resp = await fetch(entry.url);
+            const resp = await fetch(entry.url, {
+              headers: process.env.BLOB_READ_WRITE_TOKEN
+                ? { Authorization: `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}` }
+                : {},
+            });
             if (!resp.ok) continue;
             const buf = await resp.arrayBuffer();
             const data = Buffer.from(buf).toString("base64");
